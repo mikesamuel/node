@@ -26,9 +26,6 @@ const assert = require('assert');
 const net = require('net');
 const repl = require('repl');
 
-common.globalCheck = false;
-common.crashOnUnhandledRejection();
-
 const message = 'Read, Eval, Print Loop';
 const prompt_unix = 'node via Unix socket> ';
 const prompt_tcp = 'node via TCP socket> ';
@@ -40,7 +37,6 @@ const moduleFilename = fixtures.path('a');
 global.invoke_me = function(arg) {
   return `invoked ${arg}`;
 };
-
 
 // Helpers for describing the expected output:
 const kArrow = /^ *\^+ *$/;  // Arrow of ^ pointing to syntax error location
@@ -136,7 +132,11 @@ const errorTests = [
   // Uncaught error throws and prints out
   {
     send: 'throw new Error(\'test error\');',
-    expect: /^Error: test error/
+    expect: 'Error: test error'
+  },
+  {
+    send: "throw { foo: 'bar' };",
+    expect: "Thrown: { foo: 'bar' }"
   },
   // Common syntax error is treated as multiline command
   {
@@ -163,13 +163,21 @@ const errorTests = [
     send: '.break',
     expect: ''
   },
-  // Template expressions can cross lines
+  // Template expressions
   {
     send: '`io.js ${"1.0"',
     expect: '... '
   },
   {
     send: '+ ".2"}`',
+    expect: '\'io.js 1.0.2\''
+  },
+  {
+    send: '`io.js ${',
+    expect: '... '
+  },
+  {
+    send: '"1.0" + ".2"}`',
     expect: '\'io.js 1.0.2\''
   },
   // Dot prefix in multiline commands aren't treated as commands
@@ -303,6 +311,15 @@ const errorTests = [
   // Multiline object
   {
     send: '{ a: ',
+    expect: '... '
+  },
+  {
+    send: '1 }',
+    expect: '{ a: 1 }'
+  },
+  // Multiline string-keyed object (e.g. JSON)
+  {
+    send: '{ "a": ',
     expect: '... '
   },
   {
@@ -513,7 +530,7 @@ const errorTests = [
   {
     send: 'require("internal/repl")',
     expect: [
-      /^Error: Cannot find module 'internal\/repl'/,
+      /^{ Error: Cannot find module 'internal\/repl'/,
       /^    at .*/,
       /^    at .*/,
       /^    at .*/,
@@ -644,14 +661,68 @@ const errorTests = [
   },
   // Do not parse `...[]` as a REPL keyword
   {
-    send: '...[]\n',
-    expect: '... ... '
+    send: '...[]',
+    expect: [
+      kSource,
+      kArrow,
+      '',
+      /^SyntaxError: /,
+      ''
+    ]
   },
   // bring back the repl to prompt
   {
     send: '.break',
     expect: ''
-  }
+  },
+  {
+    send: 'console.log("Missing comma in arg list" process.version)',
+    expect: [
+      kSource,
+      kArrow,
+      '',
+      /^SyntaxError: /,
+      ''
+    ]
+  },
+  {
+    send: 'x = {\nfield\n{',
+    expect: [
+      '... ... {',
+      kArrow,
+      '',
+      /^SyntaxError: /,
+      ''
+    ]
+  },
+  {
+    send: '(2 + 3))',
+    expect: [
+      kSource,
+      kArrow,
+      '',
+      /^SyntaxError: /,
+      ''
+    ]
+  },
+  {
+    send: 'if (typeof process === "object"); {',
+    expect: '... '
+  },
+  {
+    send: 'console.log("process is defined");',
+    expect: '... '
+  },
+  {
+    send: '} else {',
+    expect: [
+      kSource,
+      kArrow,
+      '',
+      /^SyntaxError: /,
+      ''
+    ]
+  },
 ];
 
 const tcpTests = [
@@ -691,6 +762,7 @@ const tcpTests = [
 
     socket.end();
   }
+  common.allowGlobals(...Object.values(global));
 })();
 
 function startTCPRepl() {

@@ -34,6 +34,17 @@ RUNTIME_FUNCTION(Runtime_BigIntCompareToNumber) {
   return *isolate->factory()->ToBoolean(result);
 }
 
+RUNTIME_FUNCTION(Runtime_BigIntCompareToString) {
+  HandleScope scope(isolate);
+  DCHECK_EQ(3, args.length());
+  CONVERT_ARG_HANDLE_CHECKED(Smi, mode, 0);
+  CONVERT_ARG_HANDLE_CHECKED(BigInt, lhs, 1);
+  CONVERT_ARG_HANDLE_CHECKED(String, rhs, 2);
+  bool result = ComparisonResultToBool(static_cast<Operation>(mode->value()),
+                                       BigInt::CompareToString(lhs, rhs));
+  return *isolate->factory()->ToBoolean(result);
+}
+
 RUNTIME_FUNCTION(Runtime_BigIntEqualToBigInt) {
   SealHandleScope shs(isolate);
   DCHECK_EQ(2, args.length());
@@ -57,7 +68,6 @@ RUNTIME_FUNCTION(Runtime_BigIntEqualToString) {
   DCHECK_EQ(2, args.length());
   CONVERT_ARG_HANDLE_CHECKED(BigInt, lhs, 0);
   CONVERT_ARG_HANDLE_CHECKED(String, rhs, 1);
-  rhs = String::Flatten(rhs);
   bool result = BigInt::EqualToString(lhs, rhs);
   return *isolate->factory()->ToBoolean(result);
 }
@@ -74,6 +84,13 @@ RUNTIME_FUNCTION(Runtime_BigIntToNumber) {
   DCHECK_EQ(1, args.length());
   CONVERT_ARG_HANDLE_CHECKED(BigInt, x, 0);
   return *BigInt::ToNumber(x);
+}
+
+RUNTIME_FUNCTION(Runtime_ToBigInt) {
+  HandleScope scope(isolate);
+  DCHECK_EQ(1, args.length());
+  CONVERT_ARG_HANDLE_CHECKED(Object, x, 0);
+  RETURN_RESULT_OR_FAILURE(isolate, BigInt::FromObject(isolate, x));
 }
 
 RUNTIME_FUNCTION(Runtime_BigIntBinaryOp) {
@@ -108,7 +125,7 @@ RUNTIME_FUNCTION(Runtime_BigIntBinaryOp) {
       result = BigInt::Remainder(left, right);
       break;
     case Operation::kExponentiate:
-      UNIMPLEMENTED();
+      result = BigInt::Exponentiate(left, right);
       break;
     case Operation::kBitwiseAnd:
       result = BigInt::BitwiseAnd(left, right);

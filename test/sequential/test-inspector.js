@@ -11,8 +11,9 @@ function checkListResponse(response) {
   assert.strictEqual(1, response.length);
   assert.ok(response[0].devtoolsFrontendUrl);
   assert.ok(
-    /ws:\/\/127\.0\.0\.1:\d+\/[0-9A-Fa-f]{8}-/
-      .test(response[0].webSocketDebuggerUrl));
+    /ws:\/\/localhost:\d+\/[0-9A-Fa-f]{8}-/
+      .test(response[0].webSocketDebuggerUrl),
+    response[0].webSocketDebuggerUrl);
 }
 
 function checkVersion(response) {
@@ -34,12 +35,6 @@ function checkBadPath(err) {
 function checkException(message) {
   assert.strictEqual(message.exceptionDetails, undefined,
                      'An exception occurred during execution');
-}
-
-function assertNoUrlsWhileConnected(response) {
-  assert.strictEqual(1, response.length);
-  assert.ok(!response[0].hasOwnProperty('devtoolsFrontendUrl'));
-  assert.ok(!response[0].hasOwnProperty('webSocketDebuggerUrl'));
 }
 
 function assertScopeValues({ result }, expected) {
@@ -289,7 +284,6 @@ async function runTest() {
   await child.httpGet(null, '/json/badpath').catch(checkBadPath);
 
   const session = await child.connectInspectorSession();
-  assertNoUrlsWhileConnected(await child.httpGet(null, '/json/list'));
   await testBreakpointOnStart(session);
   await testBreakpoint(session);
   await testI18NCharacters(session);
@@ -297,7 +291,5 @@ async function runTest() {
   await session.runToCompletion();
   assert.strictEqual(55, (await child.expectShutdown()).exitCode);
 }
-
-common.crashOnUnhandledRejection();
 
 runTest();

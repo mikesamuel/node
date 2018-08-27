@@ -17,20 +17,21 @@ namespace internal {
 
 class V8_EXPORT_PRIVATE CodeFactory final {
  public:
-  // CEntryStub has var-args semantics (all the arguments are passed on the
+  // CEntry has var-args semantics (all the arguments are passed on the
   // stack and the arguments count is passed via register) which currently
   // can't be expressed in CallInterfaceDescriptor. Therefore only the code
   // is exported here.
   static Handle<Code> RuntimeCEntry(Isolate* isolate, int result_size = 1);
 
+  static Handle<Code> CEntry(Isolate* isolate, int result_size = 1,
+                             SaveFPRegsMode save_doubles = kDontSaveFPRegs,
+                             ArgvMode argv_mode = kArgvOnStack,
+                             bool builtin_exit_frame = false);
+
   // Initial states for ICs.
-  static Callable LoadICProtoArray(Isolate* isolate, bool throw_if_nonexistent);
   static Callable LoadGlobalIC(Isolate* isolate, TypeofMode typeof_mode);
   static Callable LoadGlobalICInOptimizedCode(Isolate* isolate,
                                               TypeofMode typeof_mode);
-  static Callable StoreGlobalIC(Isolate* isolate, LanguageMode mode);
-  static Callable StoreGlobalICInOptimizedCode(Isolate* isolate,
-                                               LanguageMode mode);
   static Callable StoreOwnIC(Isolate* isolate);
   static Callable StoreOwnICInOptimizedCode(Isolate* isolate);
 
@@ -46,7 +47,6 @@ class V8_EXPORT_PRIVATE CodeFactory final {
 
   // Code stubs. Add methods here as needed to reduce dependency on
   // code-stubs.h.
-  static Callable GetProperty(Isolate* isolate);
 
   static Callable NonPrimitiveToPrimitive(
       Isolate* isolate, ToPrimitiveHint hint = ToPrimitiveHint::kDefault);

@@ -32,7 +32,7 @@ void RecordWriteDescriptor::InitializePlatformSpecific(
   data->InitializePlatformSpecific(kParameterCount, default_stub_registers);
 }
 
-const Register FastNewFunctionContextDescriptor::FunctionRegister() {
+const Register FastNewFunctionContextDescriptor::ScopeInfoRegister() {
   return r3;
 }
 const Register FastNewFunctionContextDescriptor::SlotsRegister() { return r2; }
@@ -42,8 +42,6 @@ const Register LoadDescriptor::NameRegister() { return r4; }
 const Register LoadDescriptor::SlotRegister() { return r2; }
 
 const Register LoadWithVectorDescriptor::VectorRegister() { return r5; }
-
-const Register LoadICProtoArrayDescriptor::HandlerRegister() { return r6; }
 
 const Register StoreDescriptor::ReceiverRegister() { return r3; }
 const Register StoreDescriptor::NameRegister() { return r4; }
@@ -67,12 +65,6 @@ const Register MathPowIntegerDescriptor::exponent() {
 
 const Register GrowArrayElementsDescriptor::ObjectRegister() { return r2; }
 const Register GrowArrayElementsDescriptor::KeyRegister() { return r5; }
-
-void FastNewClosureDescriptor::InitializePlatformSpecific(
-    CallInterfaceDescriptorData* data) {
-  Register registers[] = {r3, r4, r5};
-  data->InitializePlatformSpecific(arraysize(registers), registers);
-}
 
 // static
 const Register TypeConversionDescriptor::ArgumentRegister() { return r2; }
@@ -198,6 +190,12 @@ void TransitionElementsKindDescriptor::InitializePlatformSpecific(
   data->InitializePlatformSpecific(arraysize(registers), registers);
 }
 
+void AbortJSDescriptor::InitializePlatformSpecific(
+    CallInterfaceDescriptorData* data) {
+  Register registers[] = {r3};
+  data->InitializePlatformSpecific(arraysize(registers), registers);
+}
+
 void AllocateHeapNumberDescriptor::InitializePlatformSpecific(
     CallInterfaceDescriptorData* data) {
   data->InitializePlatformSpecific(0, nullptr, nullptr);
@@ -244,12 +242,6 @@ void CompareDescriptor::InitializePlatformSpecific(
 }
 
 void BinaryOpDescriptor::InitializePlatformSpecific(
-    CallInterfaceDescriptorData* data) {
-  Register registers[] = {r3, r2};
-  data->InitializePlatformSpecific(arraysize(registers), registers);
-}
-
-void StringAddDescriptor::InitializePlatformSpecific(
     CallInterfaceDescriptorData* data) {
   Register registers[] = {r3, r2};
   data->InitializePlatformSpecific(arraysize(registers), registers);

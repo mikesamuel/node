@@ -175,7 +175,8 @@ class SendMessageToBackendTask : public TaskRunner::Task {
   v8::internal::Vector<uint16_t> message_;
 };
 
-void RunAsyncTask(TaskRunner* task_runner, const char* task_name,
+void RunAsyncTask(TaskRunner* task_runner,
+                  const v8_inspector::StringView& task_name,
                   TaskRunner::Task* task) {
   class AsyncTask : public TaskRunner::Task {
    public:
@@ -193,10 +194,7 @@ void RunAsyncTask(TaskRunner* task_runner, const char* task_name,
     DISALLOW_COPY_AND_ASSIGN(AsyncTask);
   };
 
-  task_runner->data()->AsyncTaskScheduled(
-      v8_inspector::StringView(reinterpret_cast<const uint8_t*>(task_name),
-                               strlen(task_name)),
-      task, false);
+  task_runner->data()->AsyncTaskScheduled(task_name, task, false);
   task_runner->Append(new AsyncTask(task));
 }
 
@@ -242,6 +240,7 @@ class ExecuteStringTask : public TaskRunner::Task {
                           expression_utf8_.length());
 
     v8::ScriptCompiler::Source scriptSource(source, origin);
+    v8::Isolate::SafeForTerminationScope allowTermination(data->isolate());
     if (!is_module_) {
       v8::Local<v8::Script> script;
       if (!v8::ScriptCompiler::Compile(context, &scriptSource).ToLocal(&script))
@@ -626,13 +625,16 @@ class SetTimeoutExtension : public IsolateData::SetupGlobalTask {
     v8::Local<v8::Context> context = isolate->GetCurrentContext();
     IsolateData* data = IsolateData::FromContext(context);
     int context_group_id = data->GetContextGroupId(context);
+    const char* task_name = "setTimeout";
+    v8_inspector::StringView task_name_view(
+        reinterpret_cast<const uint8_t*>(task_name), strlen(task_name));
     if (args[0]->IsFunction()) {
-      RunAsyncTask(data->task_runner(), "setTimeout",
+      RunAsyncTask(data->task_runner(), task_name_view,
                    new SetTimeoutTask(context_group_id, isolate,
                                       v8::Local<v8::Function>::Cast(args[0])));
     } else {
       RunAsyncTask(
-          data->task_runner(), "setTimeout",
+          data->task_runner(), task_name_view,
           new ExecuteStringTask(
               context_group_id, ToVector(args[0].As<v8::String>()),
               v8::String::Empty(isolate), v8::Integer::New(isolate, 0),
@@ -703,6 +705,13 @@ class InspectorExtension : public IsolateData::SetupGlobalTask {
         ToV8String(isolate, "externalAsyncTaskFinished"),
         v8::FunctionTemplate::New(
             isolate, &InspectorExtension::ExternalAsyncTaskFinished));
+    inspector->Set(ToV8String(isolate, "scheduleWithAsyncStack"),
+                   v8::FunctionTemplate::New(
+                       isolate, &InspectorExtension::ScheduleWithAsyncStack));
+    inspector->Set(
+        ToV8String(isolate, "setAllowCodeGenerationFromStrings"),
+        v8::FunctionTemplate::New(
+            isolate, &InspectorExtension::SetAllowCodeGenerationFromStrings));
     global->Set(ToV8String(isolate, "inspector"), inspector);
   }
 
@@ -926,7 +935,89 @@ class InspectorExtension : public IsolateData::SetupGlobalTask {
             args[0].As<v8::ArrayBuffer>()->GetContents().Data());
     data->ExternalAsyncTaskFinished(*id);
   }
+
+  static void ScheduleWithAsyncStack(
+      const v8::FunctionCallbackInfo<v8::Value>& args) {
+    if (args.Length() != 3 || !args[0]->IsFunction() || !args[1]->IsString() ||
+        !args[2]->IsBoolean()) {
+      fprintf(stderr,
+              "Internal error: scheduleWithAsyncStack(function, "
+              "'task-name', with_empty_stack).");
+      Exit();
+    }
+    v8::Isolate* isolate = args.GetIsolate();
+    v8::Local<v8::Context> context = isolate->GetCurrentContext();
+    IsolateData* data = IsolateData::FromContext(context);
+    int context_group_id = data->GetContextGroupId(context);
+    bool with_empty_stack = args[2].As<v8::Boolean>()->Value();
+    if (with_empty_stack) context->Exit();
+
+    v8::internal::Vector<uint16_t> task_name =
+        ToVector(args[1].As<v8::String>());
+    v8_inspector::StringView task_name_view(task_name.start(),
+                                            task_name.length());
+
+    RunAsyncTask(data->task_runner(), task_name_view,
+                 new SetTimeoutTask(context_group_id, isolate,
+                                    v8::Local<v8::Function>::Cast(args[0])));
+    if (with_empty_stack) context->Enter();
+  }
+
+  static void SetAllowCodeGenerationFromStrings(
+      const v8::FunctionCallbackInfo<v8::Value>& args) {
+    if (args.Length() != 1 || !args[0]->IsBoolean()) {
+      fprintf(stderr,
+              "Internal error: setAllowCodeGenerationFromStrings(allow).");
+      Exit();
+    }
+    args.GetIsolate()->GetCurrentContext()->AllowCodeGenerationFromStrings(
+        args[0].As<v8::Boolean>()->Value());
+  }
 };
+
+bool RunExtraCode(v8::Isolate* isolate, v8::Local<v8::Context> context,
+                  const char* utf8_source, const char* name) {
+  v8::Context::Scope context_scope(context);
+  v8::TryCatch try_catch(isolate);
+  v8::Local<v8::String> source_string;
+  if (!v8::String::NewFromUtf8(isolate, utf8_source, v8::NewStringType::kNormal)
+           .ToLocal(&source_string)) {
+    return false;
+  }
+  v8::Local<v8::String> resource_name =
+      v8::String::NewFromUtf8(isolate, name, v8::NewStringType::kNormal)
+          .ToLocalChecked();
+  v8::ScriptOrigin origin(resource_name);
+  v8::ScriptCompiler::Source source(source_string, origin);
+  v8::Local<v8::Script> script;
+  if (!v8::ScriptCompiler::Compile(context, &source).ToLocal(&script))
+    return false;
+  if (script->Run(context).IsEmpty()) return false;
+  CHECK(!try_catch.HasCaught());
+  return true;
+}
+
+v8::StartupData CreateSnapshotDataBlob(const char* embedded_source = nullptr) {
+  // Create a new isolate and a new context from scratch, optionally run
+  // a script to embed, and serialize to create a snapshot blob.
+  v8::StartupData result = {nullptr, 0};
+  {
+    v8::SnapshotCreator snapshot_creator;
+    v8::Isolate* isolate = snapshot_creator.GetIsolate();
+    {
+      v8::HandleScope scope(isolate);
+      v8::Local<v8::Context> context = v8::Context::New(isolate);
+      if (embedded_source != nullptr &&
+          !RunExtraCode(isolate, context, embedded_source, "<embedded>")) {
+        return result;
+      }
+      snapshot_creator.SetDefaultContext(context);
+    }
+    result = snapshot_creator.CreateBlob(
+        v8::SnapshotCreator::FunctionCodeHandling::kClear);
+  }
+  return result;
+}
 
 }  //  namespace
 
@@ -945,7 +1036,7 @@ int main(int argc, char* argv[]) {
     if (strcmp(argv[i], "--embed") == 0) {
       argv[i++] = nullptr;
       printf("Embedding script '%s'\n", argv[i]);
-      startup_data = v8::V8::CreateSnapshotDataBlob(argv[i]);
+      startup_data = CreateSnapshotDataBlob(argv[i]);
       argv[i] = nullptr;
     }
   }

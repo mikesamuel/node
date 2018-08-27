@@ -5,11 +5,12 @@ const common = require('../common');
 if (!common.hasCrypto)
   common.skip('missing crypto');
 const http2 = require('http2');
+const { internalBinding } = require('internal/test/binding');
 const {
   constants,
   Http2Stream,
   nghttp2ErrorString
-} = process.binding('http2');
+} = internalBinding('http2');
 const { NghttpError } = require('internal/http2/util');
 
 // tests error handling within additionalHeaders
@@ -72,7 +73,7 @@ function runTest(test) {
   req.on('error', common.expectsError({
     code: 'ERR_HTTP2_STREAM_ERROR',
     type: Error,
-    message: 'Stream closed with error code 2'
+    message: 'Stream closed with error code NGHTTP2_INTERNAL_ERROR'
   }));
 
   req.on('close', common.mustCall(() => {

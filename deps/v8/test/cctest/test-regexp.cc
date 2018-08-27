@@ -794,22 +794,14 @@ class ContextInitializer {
   v8::Local<v8::Context> env_;
 };
 
-
-static ArchRegExpMacroAssembler::Result Execute(Code* code,
-                                                String* input,
+static ArchRegExpMacroAssembler::Result Execute(Code* code, String* input,
                                                 int start_offset,
-                                                const byte* input_start,
-                                                const byte* input_end,
+                                                Address input_start,
+                                                Address input_end,
                                                 int* captures) {
   return NativeRegExpMacroAssembler::Execute(
-      code,
-      input,
-      start_offset,
-      input_start,
-      input_end,
-      captures,
-      0,
-      CcTest::i_isolate());
+      code, input, start_offset, reinterpret_cast<byte*>(input_start),
+      reinterpret_cast<byte*>(input_end), captures, 0, CcTest::i_isolate());
 }
 
 
@@ -832,8 +824,7 @@ TEST(MacroAssemblerNativeSuccess) {
   int captures[4] = {42, 37, 87, 117};
   Handle<String> input = factory->NewStringFromStaticChars("foofoo");
   Handle<SeqOneByteString> seq_input = Handle<SeqOneByteString>::cast(input);
-  const byte* start_adr =
-      reinterpret_cast<const byte*>(seq_input->GetCharsAddress());
+  Address start_adr = seq_input->GetCharsAddress();
 
   NativeRegExpMacroAssembler::Result result =
       Execute(*code,
@@ -1707,35 +1698,35 @@ TEST(UnicodeRangeSplitter) {
   base->Add(CharacterRange::Everything(), &zone);
   UnicodeRangeSplitter splitter(&zone, base);
   // BMP
-  for (uc32 c = 0; c < 0xd800; c++) {
+  for (uc32 c = 0; c < 0xD800; c++) {
     CHECK(InClass(c, splitter.bmp()));
     CHECK(!InClass(c, splitter.lead_surrogates()));
     CHECK(!InClass(c, splitter.trail_surrogates()));
     CHECK(!InClass(c, splitter.non_bmp()));
   }
   // Lead surrogates
-  for (uc32 c = 0xd800; c < 0xdbff; c++) {
+  for (uc32 c = 0xD800; c < 0xDBFF; c++) {
     CHECK(!InClass(c, splitter.bmp()));
     CHECK(InClass(c, splitter.lead_surrogates()));
     CHECK(!InClass(c, splitter.trail_surrogates()));
     CHECK(!InClass(c, splitter.non_bmp()));
   }
   // Trail surrogates
-  for (uc32 c = 0xdc00; c < 0xdfff; c++) {
+  for (uc32 c = 0xDC00; c < 0xDFFF; c++) {
     CHECK(!InClass(c, splitter.bmp()));
     CHECK(!InClass(c, splitter.lead_surrogates()));
     CHECK(InClass(c, splitter.trail_surrogates()));
     CHECK(!InClass(c, splitter.non_bmp()));
   }
   // BMP
-  for (uc32 c = 0xe000; c < 0xffff; c++) {
+  for (uc32 c = 0xE000; c < 0xFFFF; c++) {
     CHECK(InClass(c, splitter.bmp()));
     CHECK(!InClass(c, splitter.lead_surrogates()));
     CHECK(!InClass(c, splitter.trail_surrogates()));
     CHECK(!InClass(c, splitter.non_bmp()));
   }
   // Non-BMP
-  for (uc32 c = 0x10000; c < 0x10ffff; c++) {
+  for (uc32 c = 0x10000; c < 0x10FFFF; c++) {
     CHECK(!InClass(c, splitter.bmp()));
     CHECK(!InClass(c, splitter.lead_surrogates()));
     CHECK(!InClass(c, splitter.trail_surrogates()));

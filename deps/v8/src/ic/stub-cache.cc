@@ -39,7 +39,7 @@ int StubCache::PrimaryOffset(Name* name, Map* map) {
   uint32_t map_low32bits =
       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(map));
   // Base the offset on a simple combination of name and map.
-  uint32_t key = (map_low32bits + field) ^ kPrimaryMagic;
+  uint32_t key = map_low32bits + field;
   return key & ((kPrimaryTableSize - 1) << kCacheIndexShift);
 }
 
@@ -65,7 +65,7 @@ bool CommonStubCacheChecks(StubCache* stub_cache, Name* name, Map* map,
   DCHECK(!name->GetHeap()->InNewSpace(handler));
   DCHECK(name->IsUniqueName());
   DCHECK(name->HasHashCode());
-  if (handler) DCHECK(IC::IsHandler(handler));
+  if (handler) DCHECK(IC::IsHandler(MaybeObject::FromObject(handler), true));
   return true;
 }
 

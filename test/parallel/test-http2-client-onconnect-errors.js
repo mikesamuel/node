@@ -5,11 +5,12 @@ const common = require('../common');
 if (!common.hasCrypto)
   common.skip('missing crypto');
 
+const { internalBinding } = require('internal/test/binding');
 const {
   constants,
   Http2Session,
   nghttp2ErrorString
-} = process.binding('http2');
+} = internalBinding('http2');
 const http2 = require('http2');
 const { NghttpError } = require('internal/http2/util');
 
@@ -91,9 +92,14 @@ function runTest(test) {
     req.on('error', errorMustCall);
   } else {
     client.on('error', errorMustCall);
-    req.on('error', common.expectsError({
-      code: 'ERR_HTTP2_STREAM_CANCEL'
-    }));
+    req.on('error', (err) => {
+      common.expectsError({
+        code: 'ERR_HTTP2_STREAM_CANCEL'
+      })(err);
+      common.expectsError({
+        code: 'ERR_HTTP2_ERROR'
+      })(err.cause);
+    });
   }
 
   req.on('end', common.mustCall());

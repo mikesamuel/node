@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef V8_CALL_INTERFACE_DESCRIPTOR_H_
-#define V8_CALL_INTERFACE_DESCRIPTOR_H_
+#ifndef V8_INTERFACE_DESCRIPTORS_H_
+#define V8_INTERFACE_DESCRIPTORS_H_
 
 #include <memory>
 
 #include "src/assembler.h"
 #include "src/globals.h"
+#include "src/isolate.h"
 #include "src/macro-assembler.h"
 
 namespace v8 {
@@ -21,15 +22,14 @@ class PlatformInterfaceDescriptor;
   V(ContextOnly)                      \
   V(Load)                             \
   V(LoadWithVector)                   \
-  V(LoadField)                        \
-  V(LoadICProtoArray)                 \
   V(LoadGlobal)                       \
   V(LoadGlobalWithVector)             \
   V(Store)                            \
   V(StoreWithVector)                  \
   V(StoreNamedTransition)             \
   V(StoreTransition)                  \
-  V(FastNewClosure)                   \
+  V(StoreGlobal)                      \
+  V(StoreGlobalWithVector)            \
   V(FastNewFunctionContext)           \
   V(FastNewObject)                    \
   V(FastNewArguments)                 \
@@ -50,6 +50,7 @@ class PlatformInterfaceDescriptor;
   V(ConstructWithArrayLike)           \
   V(ConstructTrampoline)              \
   V(TransitionElementsKind)           \
+  V(AbortJS)                          \
   V(AllocateHeapNumber)               \
   V(Builtin)                          \
   V(ArrayConstructor)                 \
@@ -59,9 +60,8 @@ class PlatformInterfaceDescriptor;
   V(ArrayNArgumentsConstructor)       \
   V(Compare)                          \
   V(BinaryOp)                         \
-  V(StringAdd)                        \
-  V(StringCharAt)                     \
-  V(StringCharCodeAt)                 \
+  V(StringAt)                         \
+  V(StringSubstring)                  \
   V(ForInPrepare)                     \
   V(GetProperty)                      \
   V(ArgumentAdaptor)                  \
@@ -78,6 +78,7 @@ class PlatformInterfaceDescriptor;
   V(ResumeGenerator)                  \
   V(FrameDropperTrampoline)           \
   V(WasmRuntimeCall)                  \
+  V(RunMicrotasks)                    \
   BUILTIN_LIST_TFS(V)
 
 class V8_EXPORT_PRIVATE CallInterfaceDescriptorData {
@@ -362,18 +363,6 @@ class LoadDescriptor : public CallInterfaceDescriptor {
   static const Register SlotRegister();
 };
 
-// LoadFieldDescriptor is used by the shared handler that loads a field from an
-// object based on the smi-encoded field description.
-class LoadFieldDescriptor : public CallInterfaceDescriptor {
- public:
-  DEFINE_PARAMETERS(kReceiver, kSmiHandler)
-  DECLARE_DESCRIPTOR_WITH_CUSTOM_FUNCTION_TYPE(LoadFieldDescriptor,
-                                               CallInterfaceDescriptor)
-
-  static const Register ReceiverRegister();
-  static const Register SmiHandlerRegister();
-};
-
 class LoadGlobalDescriptor : public CallInterfaceDescriptor {
  public:
   DEFINE_PARAMETERS(kName, kSlot)
@@ -454,6 +443,44 @@ class StoreWithVectorDescriptor : public StoreDescriptor {
   static const int kStackArgumentsCount = kPassLastArgsOnStack ? 3 : 0;
 };
 
+class StoreGlobalDescriptor : public CallInterfaceDescriptor {
+ public:
+  DEFINE_PARAMETERS(kName, kValue, kSlot)
+  DECLARE_DESCRIPTOR_WITH_CUSTOM_FUNCTION_TYPE(StoreGlobalDescriptor,
+                                               CallInterfaceDescriptor)
+
+  static const bool kPassLastArgsOnStack =
+      StoreDescriptor::kPassLastArgsOnStack;
+  // Pass value and slot through the stack.
+  static const int kStackArgumentsCount = kPassLastArgsOnStack ? 2 : 0;
+
+  static const Register NameRegister() {
+    return StoreDescriptor::NameRegister();
+  }
+
+  static const Register ValueRegister() {
+    return StoreDescriptor::ValueRegister();
+  }
+
+  static const Register SlotRegister() {
+    return StoreDescriptor::SlotRegister();
+  }
+};
+
+class StoreGlobalWithVectorDescriptor : public StoreGlobalDescriptor {
+ public:
+  DEFINE_PARAMETERS(kName, kValue, kSlot, kVector)
+  DECLARE_DESCRIPTOR_WITH_CUSTOM_FUNCTION_TYPE(StoreGlobalWithVectorDescriptor,
+                                               StoreGlobalDescriptor)
+
+  static const Register VectorRegister() {
+    return StoreWithVectorDescriptor::VectorRegister();
+  }
+
+  // Pass value, slot and vector through the stack.
+  static const int kStackArgumentsCount = kPassLastArgsOnStack ? 3 : 0;
+};
+
 class LoadWithVectorDescriptor : public LoadDescriptor {
  public:
   DEFINE_PARAMETERS(kReceiver, kName, kSlot, kVector)
@@ -461,15 +488,6 @@ class LoadWithVectorDescriptor : public LoadDescriptor {
                                                LoadDescriptor)
 
   static const Register VectorRegister();
-};
-
-class LoadICProtoArrayDescriptor : public LoadWithVectorDescriptor {
- public:
-  DEFINE_PARAMETERS(kReceiver, kName, kSlot, kVector, kHandler)
-  DECLARE_DESCRIPTOR_WITH_CUSTOM_FUNCTION_TYPE(LoadICProtoArrayDescriptor,
-                                               LoadWithVectorDescriptor)
-
-  static const Register HandlerRegister();
 };
 
 class LoadGlobalWithVectorDescriptor : public LoadGlobalDescriptor {
@@ -483,19 +501,13 @@ class LoadGlobalWithVectorDescriptor : public LoadGlobalDescriptor {
   }
 };
 
-class FastNewClosureDescriptor : public CallInterfaceDescriptor {
- public:
-  DEFINE_PARAMETERS(kSharedFunctionInfo, kVector, kSlot)
-  DECLARE_DESCRIPTOR(FastNewClosureDescriptor, CallInterfaceDescriptor)
-};
-
 class FastNewFunctionContextDescriptor : public CallInterfaceDescriptor {
  public:
-  DEFINE_PARAMETERS(kFunction, kSlots)
+  DEFINE_PARAMETERS(kScopeInfo, kSlots)
   DECLARE_DESCRIPTOR_WITH_CUSTOM_FUNCTION_TYPE(FastNewFunctionContextDescriptor,
                                                CallInterfaceDescriptor)
 
-  static const Register FunctionRegister();
+  static const Register ScopeInfoRegister();
   static const Register SlotsRegister();
 };
 
@@ -630,7 +642,9 @@ class ConstructStubDescriptor : public CallInterfaceDescriptor {
                                                CallInterfaceDescriptor)
 };
 
-
+// This descriptor is also used by DebugBreakTrampoline because it handles both
+// regular function calls and construct calls, and we need to pass new.target
+// for the latter.
 class ConstructTrampolineDescriptor : public CallInterfaceDescriptor {
  public:
   DEFINE_PARAMETERS(kFunction, kNewTarget, kActualArgumentsCount)
@@ -650,6 +664,11 @@ class TransitionElementsKindDescriptor : public CallInterfaceDescriptor {
   DECLARE_DESCRIPTOR(TransitionElementsKindDescriptor, CallInterfaceDescriptor)
 };
 
+class AbortJSDescriptor : public CallInterfaceDescriptor {
+ public:
+  DEFINE_PARAMETERS(kObject)
+  DECLARE_DESCRIPTOR(AbortJSDescriptor, CallInterfaceDescriptor)
+};
 
 class AllocateHeapNumberDescriptor : public CallInterfaceDescriptor {
  public:
@@ -718,24 +737,19 @@ class BinaryOpDescriptor : public CallInterfaceDescriptor {
   DECLARE_DESCRIPTOR(BinaryOpDescriptor, CallInterfaceDescriptor)
 };
 
-
-class StringAddDescriptor : public CallInterfaceDescriptor {
- public:
-  DEFINE_PARAMETERS(kLeft, kRight)
-  DECLARE_DESCRIPTOR(StringAddDescriptor, CallInterfaceDescriptor)
-};
-
-class StringCharAtDescriptor final : public CallInterfaceDescriptor {
+// This desciptor is shared among String.p.charAt/charCodeAt/codePointAt
+// as they all have the same interface.
+class StringAtDescriptor final : public CallInterfaceDescriptor {
  public:
   DEFINE_PARAMETERS(kReceiver, kPosition)
-  DECLARE_DESCRIPTOR_WITH_CUSTOM_FUNCTION_TYPE(StringCharAtDescriptor,
+  DECLARE_DESCRIPTOR_WITH_CUSTOM_FUNCTION_TYPE(StringAtDescriptor,
                                                CallInterfaceDescriptor)
 };
 
-class StringCharCodeAtDescriptor final : public CallInterfaceDescriptor {
+class StringSubstringDescriptor final : public CallInterfaceDescriptor {
  public:
-  DEFINE_PARAMETERS(kReceiver, kPosition)
-  DECLARE_DESCRIPTOR_WITH_CUSTOM_FUNCTION_TYPE(StringCharCodeAtDescriptor,
+  DEFINE_PARAMETERS(kString, kFrom, kTo)
+  DECLARE_DESCRIPTOR_WITH_CUSTOM_FUNCTION_TYPE(StringSubstringDescriptor,
                                                CallInterfaceDescriptor)
 };
 
@@ -846,6 +860,13 @@ class WasmRuntimeCallDescriptor final : public CallInterfaceDescriptor {
                              0)
 };
 
+class RunMicrotasksDescriptor final : public CallInterfaceDescriptor {
+ public:
+  DEFINE_EMPTY_PARAMETERS()
+  DECLARE_DEFAULT_DESCRIPTOR(RunMicrotasksDescriptor, CallInterfaceDescriptor,
+                             0)
+};
+
 #define DEFINE_TFS_BUILTIN_DESCRIPTOR(Name, ...)                          \
   class Name##Descriptor : public CallInterfaceDescriptor {               \
    public:                                                                \
@@ -879,4 +900,4 @@ INTERFACE_DESCRIPTOR_LIST(DEF_KEY)
 #include "src/arm/interface-descriptors-arm.h"
 #endif
 
-#endif  // V8_CALL_INTERFACE_DESCRIPTOR_H_
+#endif  // V8_INTERFACE_DESCRIPTORS_H_

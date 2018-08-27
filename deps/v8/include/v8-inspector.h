@@ -99,6 +99,7 @@ class V8_EXPORT V8ContextInfo {
 
 class V8_EXPORT V8StackTrace {
  public:
+  virtual StringView firstNonEmptySourceURL() const = 0;
   virtual bool isEmpty() const = 0;
   virtual StringView topSourceURL() const = 0;
   virtual int topLineNumber() const = 0;
@@ -149,8 +150,9 @@ class V8_EXPORT V8InspectorSession {
 
   // Remote objects.
   virtual std::unique_ptr<protocol::Runtime::API::RemoteObject> wrapObject(
-      v8::Local<v8::Context>, v8::Local<v8::Value>,
-      const StringView& groupName) = 0;
+      v8::Local<v8::Context>, v8::Local<v8::Value>, const StringView& groupName,
+      bool generatePreview) = 0;
+
   virtual bool unwrapObject(std::unique_ptr<StringBuffer>* error,
                             const StringView& objectId, v8::Local<v8::Value>*,
                             v8::Local<v8::Context>*,

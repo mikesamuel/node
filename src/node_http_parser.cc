@@ -21,6 +21,7 @@
 
 #include "node.h"
 #include "node_buffer.h"
+#include "node_internals.h"
 
 #include "async_wrap-inl.h"
 #include "env-inl.h"
@@ -150,20 +151,16 @@ class Parser : public AsyncWrap, public StreamListener {
       : AsyncWrap(env, wrap, AsyncWrap::PROVIDER_HTTPPARSER),
         current_buffer_len_(0),
         current_buffer_data_(nullptr) {
-    Wrap(object(), this);
     Init(type);
   }
 
 
-  ~Parser() override {
-    ClearWrap(object());
+  void MemoryInfo(MemoryTracker* tracker) const override {
+    tracker->TrackThis(this);
+    tracker->TrackField("current_buffer", current_buffer_);
   }
 
-
-  size_t self_size() const override {
-    return sizeof(*this);
-  }
-
+  ADD_MEMORY_INFO_NAME(Parser)
 
   int on_message_begin() {
     num_fields_ = num_values_ = 0;
@@ -411,7 +408,7 @@ class Parser : public AsyncWrap, public StreamListener {
     ASSIGN_OR_RETURN_UNWRAP(&parser, args.Holder());
     CHECK(parser->current_buffer_.IsEmpty());
     CHECK_EQ(parser->current_buffer_len_, 0);
-    CHECK_EQ(parser->current_buffer_data_, nullptr);
+    CHECK_NULL(parser->current_buffer_data_);
     CHECK_EQ(Buffer::HasInstance(args[0]), true);
 
     Local<Object> buffer_obj = args[0].As<Object>();
@@ -492,7 +489,7 @@ class Parser : public AsyncWrap, public StreamListener {
     CHECK(args[0]->IsExternal());
     Local<External> stream_obj = args[0].As<External>();
     StreamBase* stream = static_cast<StreamBase*>(stream_obj->Value());
-    CHECK_NE(stream, nullptr);
+    CHECK_NOT_NULL(stream);
     stream->PushStreamListener(parser);
   }
 
@@ -525,6 +522,14 @@ class Parser : public AsyncWrap, public StreamListener {
   static const size_t kAllocBufferSize = 64 * 1024;
 
   uv_buf_t OnStreamAlloc(size_t suggested_size) override {
+    // For most types of streams, OnStreamRead will be immediately after
+    // OnStreamAlloc, and will consume all data, so using a static buffer for
+    // reading is more efficient. For other streams, just use the default
+    // allocator, which uses Malloc().
+    if (env()->http_parser_buffer_in_use())
+      return StreamListener::OnStreamAlloc(suggested_size);
+    env()->set_http_parser_buffer_in_use(true);
+
     if (env()->http_parser_buffer() == nullptr)
       env()->set_http_parser_buffer(new char[kAllocBufferSize]);
 
@@ -534,6 +539,15 @@ class Parser : public AsyncWrap, public StreamListener {
 
   void OnStreamRead(ssize_t nread, const uv_buf_t& buf) override {
     HandleScope scope(env()->isolate());
+    // Once we’re done here, either indicate that the HTTP parser buffer
+    // is free for re-use, or free() the data if it didn’t come from there
+    // in the first place.
+    OnScopeLeave on_scope_leave([&]() {
+      if (buf.base == env()->http_parser_buffer())
+        env()->set_http_parser_buffer_in_use(false);
+      else
+        free(buf.base);
+    });
 
     if (nread < 0) {
       PassReadErrorToPreviousListener(nread);
@@ -711,10 +725,10 @@ const struct http_parser_settings Parser::settings = {
 };
 
 
-void InitHttpParser(Local<Object> target,
-                    Local<Value> unused,
-                    Local<Context> context,
-                    void* priv) {
+void Initialize(Local<Object> target,
+                Local<Value> unused,
+                Local<Context> context,
+                void* priv) {
   Environment* env = Environment::GetCurrent(context);
   Local<FunctionTemplate> t = env->NewFunctionTemplate(Parser::New);
   t->InstanceTemplate()->SetInternalFieldCount(1);
@@ -761,4 +775,4 @@ void InitHttpParser(Local<Object> target,
 }  // anonymous namespace
 }  // namespace node
 
-NODE_BUILTIN_MODULE_CONTEXT_AWARE(http_parser, node::InitHttpParser)
+NODE_MODULE_CONTEXT_AWARE_INTERNAL(http_parser, node::Initialize)

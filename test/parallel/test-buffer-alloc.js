@@ -646,7 +646,7 @@ assert.strictEqual('<Buffer 81 a3 66 6f 6f a3 62 61 72>', x.inspect());
 
 {
   const buf = Buffer.allocUnsafe(2);
-  assert.strictEqual(buf.write(''), 0); //0bytes
+  assert.strictEqual(buf.write(''), 0); // 0bytes
   assert.strictEqual(buf.write('\0'), 1); // 1byte (v8 adds null terminator)
   assert.strictEqual(buf.write('a\0'), 2); // 1byte * 2
   assert.strictEqual(buf.write('あ'), 0); // 3bytes
@@ -935,9 +935,13 @@ Buffer.poolSize = 0;
 assert(Buffer.allocUnsafe(1).parent instanceof ArrayBuffer);
 Buffer.poolSize = ps;
 
-// Test Buffer.copy() segfault
-assert.throws(() => Buffer.allocUnsafe(10).copy(),
-              /TypeError: argument should be a Buffer/);
+common.expectsError(
+  () => Buffer.allocUnsafe(10).copy(),
+  {
+    code: 'ERR_INVALID_ARG_TYPE',
+    type: TypeError,
+    message: 'argument must be a buffer'
+  });
 
 const regErrorMsg =
   new RegExp('The first argument must be one of type string, Buffer, ' +
@@ -982,7 +986,11 @@ common.expectsError(() => {
   const a = Buffer.alloc(1);
   const b = Buffer.alloc(1);
   a.copy(b, 0, 0x100000000, 0x100000001);
-}, { code: undefined, type: RangeError, message: 'Index out of range' });
+}, {
+  code: 'ERR_INDEX_OUT_OF_RANGE',
+  type: RangeError,
+  message: 'Index out of range'
+});
 
 // Unpooled buffer (replaces SlowBuffer)
 {
@@ -1029,5 +1037,12 @@ common.expectsError(() => {
   Buffer.alloc(1, Buffer.alloc(0));
 }, {
   code: 'ERR_INVALID_ARG_VALUE',
+  type: TypeError
+});
+
+common.expectsError(() => {
+  Buffer.alloc(40, 'x', 20);
+}, {
+  code: 'ERR_INVALID_ARG_TYPE',
   type: TypeError
 });

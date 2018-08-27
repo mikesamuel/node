@@ -11,15 +11,16 @@
 #include "src/api.h"
 #include "src/compilation-cache.h"
 #include "src/execution.h"
-#include "src/factory.h"
 #include "src/field-type.h"
 #include "src/global-handles.h"
+#include "src/heap/factory.h"
 #include "src/heap/incremental-marking.h"
 #include "src/heap/spaces.h"
 #include "src/ic/ic.h"
 #include "src/layout-descriptor.h"
 #include "src/macro-assembler.h"
 #include "src/objects-inl.h"
+#include "src/objects/api-callbacks.h"
 #include "src/property.h"
 #include "test/cctest/cctest.h"
 #include "test/cctest/heap/heap-utils.h"
@@ -936,7 +937,7 @@ TEST(Regress436816) {
 
   Handle<JSObject> object = factory->NewJSObjectFromMap(map, TENURED);
 
-  Address fake_address = reinterpret_cast<Address>(~kHeapObjectTagMask);
+  Address fake_address = static_cast<Address>(~kHeapObjectTagMask);
   HeapObject* fake_object = HeapObject::FromAddress(fake_address);
   CHECK(fake_object->IsHeapObject());
 
@@ -1519,7 +1520,7 @@ static void TestIncrementalWriteBarrier(Handle<Map> map, Handle<Map> new_map,
   // barrier.
   JSObject::MigrateToMap(obj, new_map);
 
-  uint64_t boom_value = UINT64_C(0xbaad0176a37c28e1);
+  uint64_t boom_value = UINT64_C(0xBAAD0176A37C28E1);
 
   FieldIndex double_field_index =
       FieldIndex::ForDescriptor(*new_map, double_descriptor);

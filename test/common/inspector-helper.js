@@ -7,6 +7,7 @@ const fixtures = require('../common/fixtures');
 const { spawn } = require('child_process');
 const { parse: parseURL } = require('url');
 const { getURLFromFilePath } = require('internal/url');
+const { EventEmitter } = require('events');
 
 const _MAINSCRIPT = fixtures.path('loop.js');
 const DEBUG = false;
@@ -24,6 +25,7 @@ function spawnChildProcess(inspectorFlags, scriptContents, scriptFile) {
   const handler = tearDown.bind(null, child);
   process.on('exit', handler);
   process.on('uncaughtException', handler);
+  common.disableCrashOnUnhandledRejection();
   process.on('unhandledRejection', handler);
   process.on('SIGINT', handler);
 
@@ -154,8 +156,9 @@ class InspectorSession {
     return this._terminationPromise;
   }
 
-  disconnect() {
+  async disconnect() {
     this._socket.destroy();
+    return this.waitForServerDisconnect();
   }
 
   _onMessage(message) {
@@ -241,7 +244,7 @@ class InspectorSession {
   }
 
   _isBreakOnLineNotification(message, line, expectedScriptPath) {
-    if ('Debugger.paused' === message.method) {
+    if (message.method === 'Debugger.paused') {
       const callFrame = message.params.callFrames[0];
       const location = callFrame.location;
       const scriptPath = this._scriptsIdsByUrl.get(location.scriptId);
@@ -264,7 +267,7 @@ class InspectorSession {
   _matchesConsoleOutputNotification(notification, type, values) {
     if (!Array.isArray(values))
       values = [ values ];
-    if ('Runtime.consoleAPICalled' === notification.method) {
+    if (notification.method === 'Runtime.consoleAPICalled') {
       const params = notification.params;
       if (params.type === type) {
         let i = 0;
@@ -310,10 +313,12 @@ class InspectorSession {
   }
 }
 
-class NodeInstance {
+class NodeInstance extends EventEmitter {
   constructor(inspectorFlags = ['--inspect-brk=0'],
               scriptContents = '',
               scriptFile = _MAINSCRIPT) {
+    super();
+
     this._scriptPath = scriptFile;
     this._script = scriptFile ? null : scriptContents;
     this._portCallback = null;
@@ -325,7 +330,10 @@ class NodeInstance {
     this._unprocessedStderrLines = [];
 
     this._process.stdout.on('data', makeBufferingDataCallback(
-      (line) => console.log('[out]', line)));
+      (line) => {
+        this.emit('stdout', line);
+        console.log('[out]', line);
+      }));
 
     this._process.stderr.on('data', makeBufferingDataCallback(
       (message) => this.onStderrLine(message)));
@@ -365,10 +373,11 @@ class NodeInstance {
     }
   }
 
-  httpGet(host, path) {
+  httpGet(host, path, hostHeaderValue) {
     console.log('[test]', `Testing ${path}`);
+    const headers = hostHeaderValue ? { 'Host': hostHeaderValue } : null;
     return this.portPromise.then((port) => new Promise((resolve, reject) => {
-      const req = http.get({ host, port, path }, (res) => {
+      const req = http.get({ host, port, path, headers }, (res) => {
         let response = '';
         res.setEncoding('utf8');
         res
@@ -443,6 +452,7 @@ class NodeInstance {
 
   kill() {
     this._process.kill();
+    return this.expectShutdown();
   }
 
   scriptPath() {

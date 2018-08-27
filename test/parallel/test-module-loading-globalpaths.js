@@ -4,6 +4,7 @@ const fixtures = require('../common/fixtures');
 const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
+const { COPYFILE_FICLONE } = fs.constants;
 const child_process = require('child_process');
 const pkgName = 'foo';
 const { addLibraryPath } = require('../common/shared-lib-util');
@@ -28,7 +29,7 @@ if (process.argv[2] === 'child') {
     testExecPath = path.join(prefixBinPath, path.basename(process.execPath));
   }
   const mode = fs.statSync(process.execPath).mode;
-  fs.writeFileSync(testExecPath, fs.readFileSync(process.execPath));
+  fs.copyFileSync(process.execPath, testExecPath, COPYFILE_FICLONE);
   fs.chmodSync(testExecPath, mode);
 
   const runTest = (expectedString, env) => {
@@ -41,8 +42,6 @@ if (process.argv[2] === 'child') {
   const testFixturesDir = fixtures.path(path.basename(__filename, '.js'));
 
   const env = Object.assign({}, process.env);
-  // Turn on module debug to aid diagnosing failures.
-  env.NODE_DEBUG = 'module';
   // Unset NODE_PATH.
   delete env.NODE_PATH;
 

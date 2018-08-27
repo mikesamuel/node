@@ -10,6 +10,15 @@ if (common.hasFipsCrypto)
 const crypto = require('crypto');
 const assert = require('assert');
 
+common.expectWarning({
+  Warning: [
+    ['Use Cipheriv for counter mode of aes-256-gcm', common.noWarnCode]
+  ],
+  DeprecationWarning: [
+    ['crypto.createCipher is deprecated.', 'DEP0106']
+  ]
+});
+
 function testCipher1(key) {
   // Test encryption and decryption
   const plaintext = 'Keep this a secret? No! Tell everyone about node.js!';
@@ -81,7 +90,8 @@ testCipher2(Buffer.from('0123456789abcdef'));
     {
       code: 'ERR_INVALID_ARG_TYPE',
       type: TypeError,
-      message: 'The "cipher" argument must be of type string'
+      message: 'The "cipher" argument must be of type string. ' +
+               'Received type object'
     });
 
   common.expectsError(
@@ -90,7 +100,7 @@ testCipher2(Buffer.from('0123456789abcdef'));
       code: 'ERR_INVALID_ARG_TYPE',
       type: TypeError,
       message: 'The "password" argument must be one of type string, Buffer, ' +
-               'TypedArray, or DataView'
+               'TypedArray, or DataView. Received type object'
     });
 
   common.expectsError(
@@ -99,16 +109,7 @@ testCipher2(Buffer.from('0123456789abcdef'));
       code: 'ERR_INVALID_ARG_TYPE',
       type: TypeError,
       message: 'The "data" argument must be one of type string, Buffer, ' +
-               'TypedArray, or DataView'
-    });
-
-  common.expectsError(
-    () => crypto.createCipher('aes-256-cbc', 'secret').setAuthTag(null),
-    {
-      code: 'ERR_INVALID_ARG_TYPE',
-      type: TypeError,
-      message: 'The "buffer" argument must be one of type Buffer, ' +
-               'TypedArray, or DataView'
+               'TypedArray, or DataView. Received type object'
     });
 
   common.expectsError(
@@ -117,7 +118,7 @@ testCipher2(Buffer.from('0123456789abcdef'));
       code: 'ERR_INVALID_ARG_TYPE',
       type: TypeError,
       message: 'The "buffer" argument must be one of type Buffer, ' +
-               'TypedArray, or DataView'
+               'TypedArray, or DataView. Received type object'
     });
 }
 
@@ -132,7 +133,17 @@ testCipher2(Buffer.from('0123456789abcdef'));
     {
       code: 'ERR_INVALID_ARG_TYPE',
       type: TypeError,
-      message: 'The "cipher" argument must be of type string'
+      message: 'The "cipher" argument must be of type string. ' +
+               'Received type object'
+    });
+
+  common.expectsError(
+    () => crypto.createDecipher('aes-256-cbc', 'secret').setAuthTag(null),
+    {
+      code: 'ERR_INVALID_ARG_TYPE',
+      type: TypeError,
+      message: 'The "buffer" argument must be one of type Buffer, ' +
+               'TypedArray, or DataView. Received type object'
     });
 
   common.expectsError(
@@ -141,7 +152,7 @@ testCipher2(Buffer.from('0123456789abcdef'));
       code: 'ERR_INVALID_ARG_TYPE',
       type: TypeError,
       message: 'The "password" argument must be one of type string, Buffer, ' +
-               'TypedArray, or DataView'
+               'TypedArray, or DataView. Received type object'
     });
 }
 
@@ -232,9 +243,6 @@ testCipher2(Buffer.from('0123456789abcdef'));
   const key = '0123456789';
   const aadbuf = Buffer.from('aadbuf');
   const data = Buffer.from('test-crypto-cipher-decipher');
-
-  common.expectWarning('Warning',
-                       'Use Cipheriv for counter mode of aes-256-gcm');
 
   const cipher = crypto.createCipher('aes-256-gcm', key);
   cipher.setAAD(aadbuf);

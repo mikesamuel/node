@@ -58,6 +58,9 @@ consts_misc = [
     { 'name': 'APIObjectType',          'value': 'JS_API_OBJECT_TYPE' },
     { 'name': 'SpecialAPIObjectType',   'value': 'JS_SPECIAL_API_OBJECT_TYPE' },
 
+    { 'name': 'FirstContextType',     'value': 'FIRST_CONTEXT_TYPE' },
+    { 'name': 'LastContextType',     'value': 'LAST_CONTEXT_TYPE' },
+
     { 'name': 'IsNotStringMask',        'value': 'kIsNotStringMask' },
     { 'name': 'StringTag',              'value': 'kStringTag' },
 
@@ -164,8 +167,8 @@ consts_misc = [
         'value': 'Map::ElementsKindBits::kMask' },
     { 'name': 'bit_field2_elements_kind_shift',
         'value': 'Map::ElementsKindBits::kShift' },
-    { 'name': 'bit_field3_dictionary_map_shift',
-        'value': 'Map::DictionaryMap::kShift' },
+    { 'name': 'bit_field3_is_dictionary_map_shift',
+        'value': 'Map::IsDictionaryMapBit::kShift' },
     { 'name': 'bit_field3_number_of_own_descriptors_mask',
         'value': 'Map::NumberOfOwnDescriptorsBits::kMask' },
     { 'name': 'bit_field3_number_of_own_descriptors_shift',
@@ -201,8 +204,8 @@ consts_misc = [
     { 'name': 'jsarray_buffer_was_neutered_shift',
         'value': 'JSArrayBuffer::WasNeutered::kShift' },
 
-    { 'name': 'context_idx_closure',
-        'value': 'Context::CLOSURE_INDEX' },
+    { 'name': 'context_idx_scope_info',
+        'value': 'Context::SCOPE_INFO_INDEX' },
     { 'name': 'context_idx_native',
         'value': 'Context::NATIVE_CONTEXT_INDEX' },
     { 'name': 'context_idx_prev',
@@ -211,6 +214,9 @@ consts_misc = [
         'value': 'Context::EXTENSION_INDEX' },
     { 'name': 'context_min_slots',
         'value': 'Context::MIN_CONTEXT_SLOTS' },
+    { 'name': 'context_idx_embedder_data',
+        'value': 'Internals::kContextEmbedderDataIndex' },
+
 
     { 'name': 'namedictionaryshape_prefix_size',
         'value': 'NameDictionaryShape::kPrefixSize' },
@@ -226,6 +232,13 @@ consts_misc = [
         'value': 'NumberDictionaryShape::kPrefixSize' },
     { 'name': 'numberdictionaryshape_entry_size',
         'value': 'NumberDictionaryShape::kEntrySize' },
+
+    { 'name': 'simplenumberdictionaryshape_prefix_size',
+        'value': 'SimpleNumberDictionaryShape::kPrefixSize' },
+    { 'name': 'simplenumberdictionaryshape_entry_size',
+        'value': 'SimpleNumberDictionaryShape::kEntrySize' },
+
+    { 'name': 'type_JSError__JS_ERROR_TYPE', 'value': 'JS_ERROR_TYPE' },
 ];
 
 #
@@ -260,13 +273,11 @@ extras_accessors = [
     'ExternalString, resource, Object, kResourceOffset',
     'SeqOneByteString, chars, char, kHeaderSize',
     'SeqTwoByteString, chars, char, kHeaderSize',
-    'SharedFunctionInfo, code, Code, kCodeOffset',
-    'SharedFunctionInfo, scope_info, ScopeInfo, kScopeInfoOffset',
     'SharedFunctionInfo, function_token_position, int, kFunctionTokenPositionOffset',
     'SharedFunctionInfo, start_position_and_type, int, kStartPositionAndTypeOffset',
     'SharedFunctionInfo, end_position, int, kEndPositionOffset',
     'SharedFunctionInfo, internal_formal_parameter_count, int, kFormalParameterCountOffset',
-    'SharedFunctionInfo, compiler_hints, int, kCompilerHintsOffset',
+    'SharedFunctionInfo, flags, int, kFlagsOffset',
     'SharedFunctionInfo, length, int, kLengthOffset',
     'SlicedString, parent, String, kParentOffset',
     'Code, instruction_start, uintptr_t, kHeaderSize',
@@ -281,7 +292,7 @@ extras_accessors = [
 expected_classes = [
     'ConsString', 'FixedArray', 'HeapNumber', 'JSArray', 'JSFunction',
     'JSObject', 'JSRegExp', 'JSValue', 'Map', 'Oddball', 'Script',
-    'SeqOneByteString', 'SharedFunctionInfo'
+    'SeqOneByteString', 'SharedFunctionInfo', 'ScopeInfo'
 ];
 
 

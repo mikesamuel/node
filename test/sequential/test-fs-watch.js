@@ -28,6 +28,9 @@ const path = require('path');
 
 const tmpdir = require('../common/tmpdir');
 
+if (!common.isMainThread)
+  common.skip('process.chdir is not available in Workers');
+
 const expectFilePath = common.isWindows ||
                        common.isLinux ||
                        common.isOSX ||
@@ -112,20 +115,14 @@ tmpdir.refresh();
 // https://github.com/joyent/node/issues/6690
 {
   let oldhandle;
-  assert.throws(function() {
+  assert.throws(() => {
     const w = fs.watch(__filename, common.mustNotCall());
     oldhandle = w._handle;
     w._handle = { close: w._handle.close };
     w.close();
-  }, /^TypeError: Illegal invocation$/);
+  }, {
+    message: 'handle must be a FSEvent',
+    code: 'ERR_ASSERTION'
+  });
   oldhandle.close(); // clean up
-
-  assert.throws(function() {
-    const w = fs.watchFile(__filename, { persistent: false },
-                           common.mustNotCall());
-    oldhandle = w._handle;
-    w._handle = { stop: w._handle.stop };
-    w.stop();
-  }, /^TypeError: Illegal invocation$/);
-  oldhandle.stop(); // clean up
 }

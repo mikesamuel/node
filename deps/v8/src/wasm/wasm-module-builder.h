@@ -33,19 +33,19 @@ class ZoneBuffer : public ZoneObject {
 
   void write_u16(uint16_t x) {
     EnsureSpace(2);
-    WriteLittleEndianValue<uint16_t>(pos_, x);
+    WriteLittleEndianValue<uint16_t>(reinterpret_cast<Address>(pos_), x);
     pos_ += 2;
   }
 
   void write_u32(uint32_t x) {
     EnsureSpace(4);
-    WriteLittleEndianValue<uint32_t>(pos_, x);
+    WriteLittleEndianValue<uint32_t>(reinterpret_cast<Address>(pos_), x);
     pos_ += 4;
   }
 
   void write_u64(uint64_t x) {
     EnsureSpace(8);
-    WriteLittleEndianValue<uint64_t>(pos_, x);
+    WriteLittleEndianValue<uint64_t>(reinterpret_cast<Address>(pos_), x);
     pos_ += 8;
   }
 
@@ -172,8 +172,8 @@ class V8_EXPORT_PRIVATE WasmFunctionBuilder : public ZoneObject {
   void EmitWithU32V(WasmOpcode opcode, uint32_t immediate);
   void EmitDirectCallIndex(uint32_t index);
   void SetName(Vector<const char> name);
-  void AddAsmWasmOffset(int call_position, int to_number_position);
-  void SetAsmFunctionStartPosition(int position);
+  void AddAsmWasmOffset(size_t call_position, size_t to_number_position);
+  void SetAsmFunctionStartPosition(size_t function_position);
 
   size_t GetPosition() const { return body_.size(); }
   void FixupByte(size_t position, byte value) {

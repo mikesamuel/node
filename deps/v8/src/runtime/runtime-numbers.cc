@@ -69,42 +69,12 @@ RUNTIME_FUNCTION(Runtime_StringParseFloat) {
   return *isolate->factory()->NewNumber(value);
 }
 
-
-RUNTIME_FUNCTION(Runtime_NumberToString) {
-  HandleScope scope(isolate);
-  DCHECK_EQ(1, args.length());
-  CONVERT_NUMBER_ARG_HANDLE_CHECKED(number, 0);
-
-  return *isolate->factory()->NumberToString(number);
-}
-
-
 RUNTIME_FUNCTION(Runtime_NumberToStringSkipCache) {
   HandleScope scope(isolate);
   DCHECK_EQ(1, args.length());
   CONVERT_NUMBER_ARG_HANDLE_CHECKED(number, 0);
 
   return *isolate->factory()->NumberToString(number, false);
-}
-
-
-// Converts a Number to a Smi, if possible. Returns NaN if the number is not
-// a small integer.
-RUNTIME_FUNCTION(Runtime_NumberToSmi) {
-  SealHandleScope shs(isolate);
-  DCHECK_EQ(1, args.length());
-  CONVERT_ARG_CHECKED(Object, obj, 0);
-  if (obj->IsSmi()) {
-    return obj;
-  }
-  if (obj->IsHeapNumber()) {
-    double value = HeapNumber::cast(obj)->value();
-    int int_value = FastD2I(value);
-    if (value == FastI2D(int_value) && Smi::IsValid(int_value)) {
-      return Smi::FromInt(int_value);
-    }
-  }
-  return isolate->heap()->nan_value();
 }
 
 // Compare two Smis x, y as if they were converted to strings and then
